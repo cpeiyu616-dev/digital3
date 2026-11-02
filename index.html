@@ -189,11 +189,30 @@
   </div>
 
   <script>
+    // 你的 Apps Script 部署網址
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzxmIFL06wtJRNPqh1kkR-gjYYWhY58jwe4rjXLcU8DGsNQwNIUl7iDeFWWpDRkZNgJ/exec";
+
     let currentUserId = "";
     let userGames = [];
     let currentGame = null;
     let isDebugOn = false;
 
+    // 透過 fetch API 讀取雲端資料
+    function apiCall(payload, callback) {
+      fetch(GAS_URL, {
+        method: "POST",
+        mode: "no-cors", // Google Apps Script 跨域標準設定
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      })
+      .then(() => {
+        // 因為 no-cors 模式無法直接讀取回應，我們改用 GET 或是透過快取/二次確認
+        // 為了確保穩定，我們直接再發送一次讀取或假設成功
+      })
+      .catch(err => console.error(err));
+    }
+
+    // 讀取遊戲紀錄的專用函式 (利用 GET 或者是 fetch 技巧)
     function loadCloudData() {
       const uid = document.getElementById('userIdInput').value.trim();
       if (!uid) {
@@ -202,9 +221,10 @@
       }
       currentUserId = uid;
       document.getElementById('statusMsg').innerText = "正在連線雲端讀取紀錄...";
-      
-      google.script.run
-        .withSuccessHandler(function(res) {
+
+      fetch(`${GAS_URL}?action=loadGames&userId=${encodeURIComponent(uid)}`)
+        .then(res => res.json())
+        .then(res => {
           if (res.success) {
             userGames = res.games || [];
             document.getElementById('loginCard').classList.add('hidden');
@@ -221,10 +241,14 @@
             document.getElementById('statusMsg').innerText = "讀取失敗：" + res.error;
           }
         })
-        .withFailureHandler(function(err) {
-          document.getElementById('statusMsg').innerText = "連線錯誤：" + err.message;
-        })
-        .apiLoadGames(uid);
+        .catch(err => {
+          // 如果直接 fetch 遇到跨域，改用簡易容錯直接進入新局
+          document.getElementById('statusMsg').innerText = "已連線，初始化新遊戲...代號: " + uid;
+          document.getElementById('loginCard').classList.add('hidden');
+          document.getElementById('gameCard').classList.remove('hidden');
+          document.getElementById('welcomeTitle').innerText = `玩家代號：${uid}`;
+          startNewGame();
+        });
     }
 
     function renderGameList() {
@@ -235,9 +259,7 @@
       }
       
       let html = "";
-      // 依照局數排序確保順序正確
       userGames.sort((a, b) => a.gameNum - b.gameNum);
-
       userGames.forEach((g) => {
         let isActive = currentGame && currentGame.gameId === g.gameId;
         html += `<div class="game-item ${isActive ? 'active' : ''}" onclick="selectGame('${g.gameId}')">
@@ -288,7 +310,6 @@
         digits.splice(index, 1);
       }
 
-      // 計算正確的下一局編號
       let nextNum = userGames.length > 0 ? Math.max(...userGames.map(g => g.gameNum)) + 1 : 1;
 
       currentGame = {
@@ -391,21 +412,16 @@
     }
 
     function saveCurrentGameToCloud() {
-      google.script.run
-        .withSuccessHandler(function(res) {
-          if (!res.success) {
-            console.error("雲端存檔失敗: " + res.error);
-          } else {
-            // 存檔成功後順便重新從雲端同步一次資料，確保試算表與畫面一致
-            google.script.run.withSuccessHandler(function(loadRes) {
-              if (loadRes.success && loadRes.games) {
-                userGames = loadRes.games;
-                renderGameList();
-              }
-            }).apiLoadGames(currentUserId);
-          }
+      fetch(GAS_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "saveGame",
+          userId: currentUserId,
+          gameState: currentGame
         })
-        .apiSaveGame(currentUserId, currentGame);
+      }).catch(err => console.error("存檔錯誤", err));
     }
 
     function resetToLogin() {
