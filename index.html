@@ -197,22 +197,6 @@
     let currentGame = null;
     let isDebugOn = false;
 
-    // 透過 fetch API 讀取雲端資料
-    function apiCall(payload, callback) {
-      fetch(GAS_URL, {
-        method: "POST",
-        mode: "no-cors", // Google Apps Script 跨域標準設定
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      })
-      .then(() => {
-        // 因為 no-cors 模式無法直接讀取回應，我們改用 GET 或是透過快取/二次確認
-        // 為了確保穩定，我們直接再發送一次讀取或假設成功
-      })
-      .catch(err => console.error(err));
-    }
-
-    // 讀取遊戲紀錄的專用函式 (利用 GET 或者是 fetch 技巧)
     function loadCloudData() {
       const uid = document.getElementById('userIdInput').value.trim();
       if (!uid) {
@@ -242,12 +226,7 @@
           }
         })
         .catch(err => {
-          // 如果直接 fetch 遇到跨域，改用簡易容錯直接進入新局
-          document.getElementById('statusMsg').innerText = "已連線，初始化新遊戲...代號: " + uid;
-          document.getElementById('loginCard').classList.add('hidden');
-          document.getElementById('gameCard').classList.remove('hidden');
-          document.getElementById('welcomeTitle').innerText = `玩家代號：${uid}`;
-          startNewGame();
+          document.getElementById('statusMsg').innerText = "連線錯誤，請檢查網路或部署狀態：" + err;
         });
     }
 
@@ -414,14 +393,20 @@
     function saveCurrentGameToCloud() {
       fetch(GAS_URL, {
         method: "POST",
-        mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({
           action: "saveGame",
           userId: currentUserId,
           gameState: currentGame
         })
-      }).catch(err => console.error("存檔錯誤", err));
+      })
+      .then(res => res.json())
+      .then(res => {
+        if (!res.success) {
+          console.error("雲端存檔失敗: " + res.error);
+        }
+      })
+      .catch(err => console.error("存檔錯誤", err));
     }
 
     function resetToLogin() {
