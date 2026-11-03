@@ -371,7 +371,7 @@
     }
 
     function saveCurrentGameToCloud() {
-      // 透過建立無形的 Image 請求避開所有 CORS 跨域限制，將資料靜默傳送至 Google 試算表
+      // 透過 Image 避開 CORS 跨域限制，將資料靜默傳送至 Google 試算表存檔
       const targetUrl = `${GAS_URL}?action=save&userId=${encodeURIComponent(currentUserId)}&data=${encodeURIComponent(JSON.stringify(currentGame))}`;
       const img = new Image();
       img.src = targetUrl;
