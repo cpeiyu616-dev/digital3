@@ -146,7 +146,7 @@
       <input type="text" id="userIdInput" placeholder="輸入任何代號（例如：a、player01）" onkeypress="if(event.key==='Enter') loadCloudData()">
     </div>
     
-    <button class="btn btn-primary" onclick="loadCloudData()">進入遊戲</button>
+    <button class="btn btn-primary" onclick="loadCloudData()">進入遊戲並讀取紀錄</button>
     <div class="status-msg" id="statusMsg">提示：輸入代號即可開始遊玩並自動同步至雲端試算表。</div>
   </div>
 
@@ -203,11 +203,33 @@
         return;
       }
       currentUserId = uid;
-      
-      document.getElementById('loginCard').classList.add('hidden');
-      document.getElementById('gameCard').classList.remove('hidden');
-      document.getElementById('welcomeTitle').innerText = `玩家代號：${uid}`;
-      startNewGame();
+      document.getElementById('statusMsg').innerText = "正在連線雲端讀取紀錄...";
+
+      fetch(`${GAS_URL}?action=loadGames&userId=${encodeURIComponent(uid)}`)
+        .then(res => res.json())
+        .then(res => {
+          if (res.success) {
+            userGames = res.games || [];
+            document.getElementById('loginCard').classList.add('hidden');
+            document.getElementById('gameCard').classList.remove('hidden');
+            document.getElementById('welcomeTitle').innerText = `玩家代號：${uid}`;
+            
+            if (userGames.length === 0) {
+              startNewGame();
+            } else {
+              renderGameList();
+              selectGame(userGames[userGames.length - 1].gameId);
+            }
+          } else {
+            document.getElementById('statusMsg').innerText = "讀取失敗：" + res.error;
+          }
+        })
+        .catch(err => {
+          document.getElementById('loginCard').classList.add('hidden');
+          document.getElementById('gameCard').classList.remove('hidden');
+          document.getElementById('welcomeTitle').innerText = `玩家代號：${uid}`;
+          startNewGame();
+        });
     }
 
     function renderGameList() {
@@ -371,7 +393,7 @@
     }
 
     function saveCurrentGameToCloud() {
-      // 透過 Image 避開 CORS 跨域限制，將資料靜默傳送至 Google 試算表存檔
+      // 透過 Image 請求避開 CORS，確保每次猜測與通關都會自動寫入試算表
       const targetUrl = `${GAS_URL}?action=save&userId=${encodeURIComponent(currentUserId)}&data=${encodeURIComponent(JSON.stringify(currentGame))}`;
       const img = new Image();
       img.src = targetUrl;
