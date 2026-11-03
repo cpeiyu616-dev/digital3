@@ -1,215 +1,392 @@
-/**
- * 數位科技概論｜幾A幾B雲端存檔・後端 (Code.gs)
- */
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>幾A幾B大挑戰・雲端版</title>
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --panel-bg: rgba(17, 24, 39, 0.85);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --danger: #ef4444;
+      --primary: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 30px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 24px; margin-bottom: 8px; text-align: center; }
+    p.subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; text-align: center; }
+    
+    .input-group { margin-bottom: 15px; text-align: left; }
+    input[type="text"] {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: white;
+      font-size: 16px;
+      text-align: center;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: var(--accent); }
+    
+    .btn {
+      width: 100%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn-primary { background: var(--primary); }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-secondary { background: #4b5563; }
+    .btn-secondary:hover { background: #374151; }
+    .btn-danger { background: var(--danger); }
+    .btn-danger:hover { background: #dc2626; }
+    
+    .status-msg { margin-top: 15px; font-size: 13px; color: var(--text-muted); text-align: center; }
 
-function doGet(e) {
-  const action = e.parameter.action;
-  
-  if (action === 'loadGames') {
-    const userId = e.parameter.userId;
-    const result = apiLoadGames(userId);
-    return createCorsResponse(result);
-  }
-  
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('幾A幾B大挑戰・雲端版')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
+    .game-list {
+      max-height: 140px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 15px;
+    }
+    .game-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      background: rgba(255,255,255,0.03);
+      transition: background 0.2s;
+    }
+    .game-item:hover { background: rgba(255,255,255,0.08); }
+    .game-item.active { border: 1px solid var(--primary); background: rgba(59, 130, 246, 0.15); }
 
-function doPost(e) {
-  try {
-    let data;
-    if (e.parameter && e.parameter.payload) {
-      data = JSON.parse(e.parameter.payload);
-    } else if (e.postData && e.postData.contents) {
-      data = JSON.parse(e.postData.contents);
-    } else {
-      throw new Error("無效的請求資料");
+    .history-box {
+      max-height: 160px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 15px 0;
+      font-size: 14px;
+      font-family: monospace;
+      text-align: left;
+      white-space: pre-wrap;
     }
 
-    let result = { success: false, error: "未知動作" };
-
-    if (data.action === 'saveGame') {
-      result = apiSaveGame(data.userId, data.gameState);
+    .debug-panel {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px dashed var(--danger);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .debug-secret {
+      font-family: monospace;
+      font-size: 18px;
+      color: #f87171;
+      font-weight: bold;
+      letter-spacing: 2px;
     }
 
-    return createCorsResponse(result);
-  } catch (err) {
-    return createCorsResponse({ success: false, error: err.toString() });
-  }
-}
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
 
-function createCorsResponse(data) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+  <!-- 登入卡片 -->
+  <div class="card" id="loginCard">
+    <h1>幾A幾B・雲端版</h1>
+    <p class="subtitle">請輸入您的代號直接進入遊戲</p>
+    
+    <div class="input-group">
+      <input type="text" id="userIdInput" placeholder="輸入任何代號（例如：a、player01）" onkeypress="if(event.key==='Enter') loadCloudData()">
+    </div>
+    
+    <button class="btn btn-primary" onclick="loadCloudData()">進入遊戲</button>
+    <div class="status-msg" id="statusMsg">提示：輸入代號即可開始遊玩並自動同步至雲端試算表。</div>
+  </div>
 
-function doOptions(e) {
-  return ContentService.createTextOutput("")
-    .setMimeType(ContentService.MimeType.TEXT);
-}
+  <!-- 遊戲主介面卡片 -->
+  <div class="card hidden" id="gameCard">
+    <h1 id="welcomeTitle">玩家專區</h1>
+    <p class="subtitle" id="gameStatusSubtitle">已連線至雲端試算表</p>
+    
+    <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+      <button class="btn" onclick="startNewGame()" style="flex:2;">開新局 (4位不重複數字)</button>
+      <button class="btn btn-secondary" onclick="resetToLogin()" style="flex:1;">切換代號</button>
+    </div>
 
-// 初始化試算表與設定
-function setup() {
-  const ssName = "數位科技概論｜幾A幾B版本三存檔";
-  let sheetId = PropertiesService.getScriptProperties().getProperty('GUESS_BOOK_ID');
-  let ss;
+    <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">歷史局數選單：</div>
+    <div class="game-list" id="gameList">
+      <div style="color: var(--text-muted); text-align: center; padding: 10px;">尚無紀錄</div>
+    </div>
 
-  if (sheetId) {
-    try {
-      ss = SpreadsheetApp.openById(sheetId);
-    } catch (e) {
-      ss = null;
+    <div id="playingSection" class="hidden">
+      <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+      <div id="currentPlayingTitle" style="font-weight: bold; margin-bottom: 10px; color: var(--accent);">正在遊玩：第 1 局</div>
+      
+      <div class="input-group" style="margin-bottom: 10px;">
+        <input type="text" id="guessInput" placeholder="輸入 4 個不重複數字 (例如 0123)" maxlength="4" onkeypress="if(event.key==='Enter') submitGuess()">
+      </div>
+      <button class="btn" id="submitGuessBtn" onclick="submitGuess()">送出猜測並自動存檔</button>
+    </div>
+
+    <div style="font-size: 13px; color: var(--text-muted); margin-top: 15px; margin-bottom: 6px;">本局猜測歷程：</div>
+    <div class="history-box" id="historyBox">尚無猜測紀錄...</div>
+
+    <!-- 除錯模式面板 -->
+    <div class="debug-panel">
+      <div>
+        <div style="font-size: 12px; color: var(--text-muted);">除錯模式（顯示本局正確答案）</div>
+        <span id="debugSecretDisplay" class="debug-secret">----</span>
+      </div>
+      <button class="btn btn-danger" id="debugToggleBtn" onclick="toggleDebugMode()" style="width: auto; padding: 8px 16px; margin: 0;">開啟除錯</button>
+    </div>
+  </div>
+
+  <script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzxmIFL06wtJRNPqh1kkR-gjYYWhY58jwe4rjXLcU8DGsNQwNIUl7iDeFWWpDRkZNgJ/exec";
+
+    let currentUserId = "";
+    let userGames = [];
+    let currentGame = null;
+    let isDebugOn = false;
+
+    function loadCloudData() {
+      const uid = document.getElementById('userIdInput').value.trim();
+      if (!uid) {
+        alert("請輸入代號！");
+        return;
+      }
+      currentUserId = uid;
+      
+      document.getElementById('loginCard').classList.add('hidden');
+      document.getElementById('gameCard').classList.remove('hidden');
+      document.getElementById('welcomeTitle').innerText = `玩家代號：${uid}`;
+      startNewGame();
     }
-  }
 
-  if (!ss) {
-    const files = DriveApp.getFilesByName(ssName);
-    if (files.hasNext()) {
-      ss = SpreadsheetApp.open(files.next());
-    } else {
-      ss = SpreadsheetApp.create(ssName);
-      let sheet = ss.getActiveSheet();
-      sheet.setName("遊戲存檔");
-      sheet.appendRow([
-        "使用者代號", "局ID", "局數", "狀態", 
-        "開始時間", "更新時間", "猜測次數", "猜測歷程", "完整存檔JSON"
-      ]);
+    function renderGameList() {
+      const listEl = document.getElementById('gameList');
+      if (userGames.length === 0) {
+        listEl.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 10px;">尚無紀錄</div>';
+        return;
+      }
+      
+      let html = "";
+      userGames.sort((a, b) => a.gameNum - b.gameNum);
+      userGames.forEach((g) => {
+        let isActive = currentGame && currentGame.gameId === g.gameId;
+        html += `<div class="game-item ${isActive ? 'active' : ''}" onclick="selectGame('${g.gameId}')">
+          <span><b>第 ${g.gameNum} 局</b> (${g.status})</span>
+          <span style="color: var(--text-muted);">猜測: ${g.guessesCount} 次</span>
+        </div>`;
+      });
+      listEl.innerHTML = html;
     }
-    PropertiesService.getScriptProperties().setProperty('GUESS_BOOK_ID', ss.getId());
-  }
-  
-  let targetSheet = ss.getSheetByName("遊戲存檔");
-  if (!targetSheet) {
-    let defaultSheet = ss.getSheetByName("工作表1");
-    if (defaultSheet) {
-      defaultSheet.setName("遊戲存檔");
-      targetSheet = defaultSheet;
-    } else {
-      targetSheet = ss.insertSheet("遊戲存檔");
-      targetSheet.appendRow([
-        "使用者代號", "局ID", "局數", "狀態", 
-        "開始時間", "更新時間", "猜測次數", "猜測歷程", "完整存檔JSON"
-      ]);
-    }
-  }
 
-  ss.setSpreadsheetTimeZone("Asia/Taipei");
-  return ss.getUrl();
-}
+    function selectGame(gameId) {
+      currentGame = userGames.find(g => g.gameId === gameId);
+      if (!currentGame) return;
 
-function getSheet() {
-  let sheetId = PropertiesService.getScriptProperties().getProperty('GUESS_BOOK_ID');
-  let ss;
-  if (sheetId) {
-    try {
-      ss = SpreadsheetApp.openById(sheetId);
-    } catch (e) {
-      ss = null;
-    }
-  }
-  if (!ss) {
-    setup();
-    sheetId = PropertiesService.getScriptProperties().getProperty('GUESS_BOOK_ID');
-    ss = SpreadsheetApp.openById(sheetId);
-  }
-  
-  let sheet = ss.getSheetByName("遊戲存檔");
-  if (!sheet) {
-    setup();
-    sheet = ss.getSheetByName("遊戲存檔");
-  }
-  return sheet;
-}
+      isDebugOn = false;
+      updateDebugUI();
+      renderGameList();
 
-// API: 讀取某個代號的所有遊戲局
-function apiLoadGames(userId) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-    userId = sanitizeUserId(userId);
-    if (!userId) return { success: false, error: "代號無效" };
+      document.getElementById('playingSection').classList.remove('hidden');
+      document.getElementById('currentPlayingTitle').innerText = `正在遊玩：第 ${currentGame.gameNum} 局 [狀態: ${currentGame.status}]`;
+      
+      const historyBox = document.getElementById('historyBox');
+      if (currentGame.history && currentGame.history.length > 0) {
+        historyBox.innerText = currentGame.history.map((h, idx) => `${idx + 1}. ${h.guess} → ${h.result}`).join("\n");
+      } else {
+        historyBox.innerText = "本局尚未有猜測紀錄，請輸入 4 位不重複數字開始！";
+      }
 
-    const sheet = getSheet();
-    const rows = sheet.getDataRange().getValues();
-    let games = [];
-
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === userId) {
-        try {
-          let data = JSON.parse(rows[i][8]);
-          games.push(data);
-        } catch (err) {}
+      const guessInput = document.getElementById('guessInput');
+      const submitBtn = document.getElementById('submitGuessBtn');
+      if (currentGame.status === '已通關') {
+        guessInput.disabled = true;
+        guessInput.placeholder = "本局已通關完畢";
+        submitBtn.disabled = true;
+      } else {
+        guessInput.disabled = false;
+        guessInput.placeholder = "輸入 4 個不重複數字 (例如 0123)";
+        submitBtn.disabled = false;
       }
     }
-    let uniqueGames = Array.from(new Set(games.map(g => g.gameId)))
-      .map(id => games.find(g => g.gameId === id));
 
-    return { success: true, games: uniqueGames };
-  } catch (err) {
-    return { success: false, error: err.toString() };
-  } finally {
-    lock.releaseLock();
-  }
-}
+    function startNewGame() {
+      let digits = ['0','1','2','3','4','5','6','7','8','9'];
+      let answer = "";
+      for (let i = 0; i < 4; i++) {
+        let index = Math.floor(Math.random() * digits.length);
+        answer += digits[index];
+        digits.splice(index, 1);
+      }
 
-// API: 儲存或更新遊戲狀態
-function apiSaveGame(userId, gameState) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-    userId = sanitizeUserId(userId);
-    if (!userId || !gameState || !gameState.gameId) {
-      return { success: false, error: "資料不完整" };
+      let nextNum = userGames.length > 0 ? Math.max(...userGames.map(g => g.gameNum)) + 1 : 1;
+
+      currentGame = {
+        gameId: 'game_' + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+        gameNum: nextNum,
+        secret: answer,
+        status: '進行中',
+        startTime: new Date().toISOString(),
+        updateTime: new Date().toISOString(),
+        guessesCount: 0,
+        history: []
+      };
+
+      userGames.push(currentGame);
+      renderGameList();
+      selectGame(currentGame.gameId);
+      saveCurrentGameToCloud();
     }
 
-    const sheet = getSheet();
-    const rows = sheet.getDataRange().getValues();
-    let rowIndex = -1;
+    function submitGuess() {
+      if (!currentGame) return;
+      if (currentGame.status === '已通關') {
+        alert("本局已通關，請點擊「開新局」挑戰下一局！");
+        return;
+      }
 
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === userId && rows[i][1] === gameState.gameId) {
-        rowIndex = i + 1;
-        break;
+      const guess = document.getElementById('guessInput').value.trim();
+      if (!/^\d{4}$/.test(guess)) {
+        alert("格式錯誤：必須剛好 4 個數字！");
+        return;
+      }
+      let uniqueSet = new Set(guess.split(''));
+      if (uniqueSet.size !== 4) {
+        alert("格式錯誤：4 個數字不能重複！");
+        return;
+      }
+
+      let a = 0, b = 0;
+      let secret = currentGame.secret;
+      let secretArr = secret.split('');
+      let guessArr = guess.split('');
+      
+      let secretMatched = [false, false, false, false];
+      let guessMatched = [false, false, false, false];
+
+      for (let i = 0; i < 4; i++) {
+        if (guessArr[i] === secretArr[i]) {
+          a++;
+          secretMatched[i] = true;
+          guessMatched[i] = true;
+        }
+      }
+      for (let i = 0; i < 4; i++) {
+        if (guessMatched[i]) continue;
+        for (let j = 0; j < 4; j++) {
+          if (!secretMatched[j] && guessArr[i] === secretArr[j]) {
+            b++;
+            secretMatched[j] = true;
+            break;
+          }
+        }
+      }
+
+      let resultStr = `${a}A${b}B`;
+      currentGame.guessesCount++;
+      currentGame.history.push({ guess: guess, result: resultStr });
+
+      if (a === 4) {
+        currentGame.status = '已通關';
+        alert("恭喜答對！ 4A0B 通關成功！");
+      }
+
+      selectGame(currentGame.gameId);
+      document.getElementById('guessInput').value = "";
+      saveCurrentGameToCloud();
+    }
+
+    function toggleDebugMode() {
+      isDebugOn = !isDebugOn;
+      updateDebugUI();
+    }
+
+    function updateDebugUI() {
+      const btn = document.getElementById('debugToggleBtn');
+      const display = document.getElementById('debugSecretDisplay');
+
+      if (isDebugOn) {
+        btn.innerText = "關閉除錯";
+        btn.style.background = "#4b5563";
+        if (currentGame && currentGame.secret) {
+          display.innerText = currentGame.secret;
+        } else {
+          display.innerText = "----";
+        }
+      } else {
+        btn.innerText = "開啟除錯";
+        btn.style.background = "var(--danger)";
+        display.innerText = "----";
       }
     }
 
-    gameState.updateTime = new Date().toISOString();
-    let jsonStr = JSON.stringify(gameState);
-
-    if (rowIndex > -1) {
-      sheet.getRange(rowIndex, 4).setValue(gameState.status);
-      sheet.getRange(rowIndex, 6).setValue(gameState.updateTime);
-      sheet.getRange(rowIndex, 7).setValue(gameState.guessesCount);
-      sheet.getRange(rowIndex, 8).setValue(formatHistory(gameState.history));
-      sheet.getRange(rowIndex, 9).setValue(jsonStr);
-    } else {
-      sheet.appendRow([
-        userId,
-        gameState.gameId,
-        gameState.gameNum,
-        gameState.status,
-        gameState.startTime,
-        gameState.updateTime,
-        gameState.guessesCount,
-        formatHistory(gameState.history),
-        jsonStr
-      ]);
+    function saveCurrentGameToCloud() {
+      // 透過建立無形的 Image 請求避開所有 CORS 跨域限制，將資料靜默傳送至 Google 試算表
+      const targetUrl = `${GAS_URL}?action=save&userId=${encodeURIComponent(currentUserId)}&data=${encodeURIComponent(JSON.stringify(currentGame))}`;
+      const img = new Image();
+      img.src = targetUrl;
     }
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.toString() };
-  } finally {
-    lock.releaseLock();
-  }
-}
 
-function sanitizeUserId(id) {
-  if (!id) return "";
-  return id.toString().trim().toLowerCase().replace(/[^a-z0-9_\-]/g, '');
-}
-
-function formatHistory(history) {
-  if (!history || history.length === 0) return "";
-  return history.map((h, idx) => `${idx + 1}. ${h.guess} → ${h.result}`).join(" | ");
-}
+    function resetToLogin() {
+      currentUserId = "";
+      userGames = [];
+      currentGame = null;
+      isDebugOn = false;
+      document.getElementById('gameCard').classList.add('hidden');
+      document.getElementById('loginCard').classList.remove('hidden');
+      document.getElementById('userIdInput').value = "";
+      document.getElementById('statusMsg').innerText = "提示：輸入代號即可開始遊玩並自動同步至雲端試算表。";
+    }
+  </script>
+</body>
+</html>
